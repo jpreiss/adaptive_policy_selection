@@ -1,0 +1,16 @@
+name: gaps
+channels:
+  - defaults
+dependencies:
+  - cmake  # For learning-and-control/core
+  - matplotlib
+  - numpy
+  - pandas
+  - pytorch::pytorch
+  - conda-forge::torchdiffeq
+  - numba
+  - seaborn
+  - tqdm
+  - pip
+  - pip:
+    - git+https://github.com/learning-and-control/core@batched
