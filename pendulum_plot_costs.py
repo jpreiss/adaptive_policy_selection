@@ -1,28 +1,31 @@
-import itertools as it
-import os
-from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import EngFormatter
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from util import fastmode
 
-REGRET = "cost difference, ours - LQR"
+
+REGRET = "``regret'' GAPS - LQR"
 
 
 def main():
 
-    if os.getenv("FAST").lower() != "true":
+    if not fastmode():
         plt.rc("text", usetex=True)
         plt.rc("font", size=12)
 
-    noises = ["walk", "gaussian"]
+    paths = sys.argv[1:]
 
     dfs = []
-    for noise in noises:
-        data = np.load(f"data/pendulum_{noise}.npz")
+    for path in paths:
+        _, noise, seed = path.split("_")
+        seed, _ = seed.split(".")
+        seed = int(seed)
+        data = np.load(path)
         dt = data["dt"]
         cost_log = data["cost_log"]
         time = dt * np.arange(len(cost_log))
@@ -39,22 +42,23 @@ def main():
     df = df[::100]
 
     sns.set_style("ticks", {"axes.grid" : True})
-    fig, ax = plt.subplots(1, 1, figsize=(3.5, 2.5), constrained_layout=True)
+    fig, ax = plt.subplots(1, 1, figsize=(3.5, 2.25), constrained_layout=True)
     sns.lineplot(
         data=df,
         ax=ax,
-        #kind="line",
         x="time",
         y=REGRET,
         size="disturbance",
         color="black",
-        #height=2.7,
-        #aspect=1.4,
+        errorbar="sd",
     )
     sns.despine(ax=ax)
     # Need to increase a little to make sure grid lines aren't clipped.
     ax.set(xticks=200*np.arange(6))
-    ax.set(xlim=[0, 1002], ylim=[-8000, 5010])
+    ax.set(xlim=[0, 1002], ylim=[-13000, 5050])
+    ax.legend(title="disturbance", handlelength=1.5)
+    formatter = EngFormatter(sep="")
+    ax.yaxis.set_major_formatter(formatter)
     fig.savefig("plots/pendulum_costs.pdf")
 
 

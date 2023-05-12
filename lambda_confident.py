@@ -1,15 +1,13 @@
 """Compares GAPS against a FTL-type algorithm for confidence tuning."""
 
-import os
+import sys
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from scipy.linalg import solve_discrete_are
-import seaborn as sns
 
 from lineartracking import LinearTracking
 from MPCLTI import MPCLTI
+from util import fastmode
 
 
 class SelfTuningLambdaConfidentControl:
@@ -52,7 +50,7 @@ class SelfTuningLambdaConfidentControl:
         self.etas = np.full(T, None)
 
         self.init_lambda = initial_trust
-        self.lambda_history = []
+        self.lambda_history = [initial_trust]
 
 
     def _update_etas(self, etas, ws):
@@ -112,6 +110,9 @@ class SelfTuningLambdaConfidentControl:
 
 
 def main():
+    seed = int(sys.argv[1])
+    outpath = sys.argv[2]
+    np.random.seed(seed)
 
     # LQR instance.
     A = 2 * np.eye(1)
@@ -122,21 +123,24 @@ def main():
     x0 = np.zeros(1)
 
     # Constants that should be reported in the paper.
-    T = 400
+    if fastmode():
+        T = 40
+    else:
+        T = 400
     W_BOUND = 2
     W_SMALL_FACTOR = 0.01
-    OMEGA = 0.1
+    HERTZ = 0.01 * (10 ** np.random.uniform(0, 1))
+    OMEGA = 2 * np.pi * HERTZ
+    PHASE = np.random.uniform(0, 2*np.pi)
     INITIAL_BAD_STEPS_RECIP = 4
     INITIAL_LAMBDA = 1.0
-    ROLLING_MEAN = 10
     # TODO: Correct choices for these constants?
     LEARNING_RATE = 4e-1 / (np.trace(P) * W_BOUND * np.sqrt(T))
     PREDICTION_HORIZON = int(np.log(T))
     GRADIENT_BUFFER = int(np.log(T))
 
     # Real and corrupted disturbances.
-    disturbances = np.sin(OMEGA * np.arange(T))[:, None]
-    np.random.seed(100)
+    disturbances = np.sin(OMEGA * np.arange(T) + PHASE)[:, None]
     predicted_disturbances = disturbances.copy()
     become_good = T // INITIAL_BAD_STEPS_RECIP
     predicted_disturbances[:become_good, 0] += W_BOUND * np.random.uniform(-1, 1, size=become_good)
@@ -159,7 +163,7 @@ def main():
     #
     # Ours.
     #
-    mpc = MPCLTI(np.array(INITIAL_LAMBDA), GRADIENT_BUFFER, LEARNING_RATE, horizon=PREDICTION_HORIZON)
+    mpc = MPCLTI(np.array([INITIAL_LAMBDA]), GRADIENT_BUFFER, LEARNING_RATE, horizon=PREDICTION_HORIZON)
 
     # This experiment is just a regulator, but the LinearTracking API expects a target trajectory.
     target_traj = np.zeros((1, T + 1))
@@ -177,37 +181,16 @@ def main():
         grad_tuple = LTI_instance.step(control_action)
         mpc.update_param(grad_tuple)
 
-
-    #
-    # Plotting.
-    #
-    if os.getenv("FAST").lower() != "true":
-        plt.rc("text", usetex=True)
-        plt.rc("font", size=11)
-    fig, axs = plt.subplots(2, 1, figsize=(4.0, 4.0), constrained_layout=True, sharex=True)
-    ax_lam, ax_err = axs
-
-    ax_lam.plot(confident.lambda_history, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
-    ax_lam.plot(mpc.param_history, color="black", label="ours", zorder=3)
-    ax_lam.set_ylim([-0.1, 1.1])
-    ax_lam.set_ylabel("confidence $\\lambda$")
-
     costs_ours, whole_trajectory = LTI_instance.reset()
-    costs_ours = pd.Series(costs_ours).rolling(ROLLING_MEAN).mean()
-    costs_confident = pd.Series(costs_confident).rolling(ROLLING_MEAN).mean()
-    ax_err.plot(costs_confident, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
-    ax_err.plot(costs_ours, color="black", label="ours", zorder=3)
-    ax_err.set_ylabel("LQR cost (moving avg.)")
 
-    for ax in axs:
-        ax.set(xlabel="time", xlim=[-10, 400])
-        ax.grid(True)
-        ax.axvline(become_good, label="$\\widehat w$ becomes accurate", color="red", zorder=2)
-        sns.despine(ax=ax)
-
-    ax_err.legend()
-    fig.align_ylabels(axs)
-    fig.savefig("plots/lambda_confident_comparison.pdf")
+    np.savez(
+        outpath,
+        become_good=become_good,
+        lambda_param=confident.lambda_history,
+        gaps_param=np.array(mpc.param_history).squeeze(),
+        lambda_cost=costs_confident,
+        gaps_cost=costs_ours,
+    )
 
 
 if __name__ == '__main__':

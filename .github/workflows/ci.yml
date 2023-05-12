@@ -20,3 +20,9 @@ jobs:
       shell: bash -l {0}
       run: |
         FAST=true make -j
+
+    - name: Archive
+      uses: actions/upload-artifact@v3
+      with:
+        name: plots
+        path: plots/*.pdf

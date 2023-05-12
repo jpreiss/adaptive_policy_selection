@@ -1,4 +1,3 @@
-import os
 import multiprocessing
 
 import matplotlib as mpl
@@ -12,6 +11,7 @@ from discrete import MPCHorizonSelector
 from lineartracking import LinearTracking
 from label_lines import labelLines
 from MPCLTI import MPCLTI
+from util import fastmode
 
 
 LIGHT_GREY = "#BBBBBB"
@@ -46,7 +46,7 @@ def main():
     step_losses = np.mean(horizon_cost_histories, axis=1)
 
     plt.rc("figure", autolayout=True)
-    if os.getenv("FAST").lower() != "true":
+    if not fastmode():
         plt.rc("text", usetex=True)
         plt.rc("font", size=12)
 
@@ -88,7 +88,7 @@ def main():
     reverse_category(df_exp3, ARM)
     grid = sns.catplot(
         kind="swarm",
-        s=1.8,
+        s=3.2,
         data=df_exp3,
         x=BATCH,
         y=ARM,

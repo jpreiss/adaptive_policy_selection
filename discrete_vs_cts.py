@@ -1,7 +1,6 @@
 """Compares MPC horizon selection (BAPS) vs. MPC confidence tuning (GAPS)."""
 
 import multiprocessing
-import os
 
 import matplotlib as mpl
 import numpy as np
@@ -11,6 +10,7 @@ from scipy.linalg import solve_discrete_are
 from discrete import MPCHorizonSelector
 from lineartracking import LinearTracking
 from MPCLTI import MPCLTI
+from util import fastmode
 
 
 def contraction_properties(F):
@@ -52,7 +52,7 @@ def main():
     print("-" * 60)
     print("Comparing discrete vs. continuous MPC trust optimization.")
 
-    if os.getenv("FAST").lower() == "true":
+    if fastmode():
         T = 10000
     else:
         T = 1000000
@@ -107,7 +107,7 @@ def main():
         (LTI_instance, k, MPCLTI(np.ones(k), 0, 0.0), T)
         for k in horizons
     ]
-    pool = multiprocessing.Pool(os.cpu_count() - 1)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
     outputs = pool.starmap(run, args)
     cost_histories = [out[0] for out in outputs]
 
