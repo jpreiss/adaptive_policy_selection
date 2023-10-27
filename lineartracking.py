@@ -58,7 +58,7 @@ class LinearTracking:
         return self.state, context
 
     # evolve the system for one step using control_action
-    # return the available gradients (f_t/x_t, f_t/u_t, g_t/x_t, g_t/u_t)
+    # return the available gradients (c_t/x_t, c_t/u_t, x_t/x_{t-1}, x_t/u_{t-1})
     def step(self, control_action):
         t = self.time_counter
         stage_cost = (

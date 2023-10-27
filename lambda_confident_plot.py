@@ -32,18 +32,7 @@ def main():
             "algorithm": "$\\lambda$-confident",
         }))
     df = pd.concat(dfs)
-
-    if False:
-        # Smoothing.
-        gp = df.groupby(["algorithm", "seed"])
-        roll = gp.rolling(5, center=True)
-        m = roll.mean()
-        df = m.reset_index()
-        # TODO: There must be a less hacky way...
-        df[TIME] = df["level_2"]
-    else:
-        df[TIME] = df.index
-
+    df[TIME] = df.index
     df = df.melt(id_vars=["algorithm", TIME, "seed"])
 
     if not fastmode():

@@ -6,7 +6,7 @@ import numpy as np
 from scipy.linalg import solve_discrete_are
 
 from lineartracking import LinearTracking
-from MPCLTI import MPCLTI
+from MPCLTI import MPCLTI_GAPS
 from util import fastmode
 
 
@@ -81,8 +81,6 @@ class SelfTuningLambdaConfidentControl:
         if t < 2:
             lam = self.init_lambda
         else:
-            # TODO: Why can't we use this for t == 1?
-            # TODO: Vectorize
             numerator = sum(
                 self.etas[s].T @ self.H @ self.eta_hats[s]
                 for s in range(t)
@@ -134,7 +132,6 @@ def main():
     PHASE = np.random.uniform(0, 2*np.pi)
     INITIAL_BAD_STEPS_RECIP = 4
     INITIAL_LAMBDA = 1.0
-    # TODO: Correct choices for these constants?
     LEARNING_RATE = 4e-1 / (np.trace(P) * W_BOUND * np.sqrt(T))
     PREDICTION_HORIZON = int(np.log(T))
     GRADIENT_BUFFER = int(np.log(T))
@@ -163,7 +160,7 @@ def main():
     #
     # Ours.
     #
-    mpc = MPCLTI(np.array([INITIAL_LAMBDA]), GRADIENT_BUFFER, LEARNING_RATE, horizon=PREDICTION_HORIZON)
+    mpc = MPCLTI_GAPS(np.array([INITIAL_LAMBDA]), GRADIENT_BUFFER, LEARNING_RATE, horizon=PREDICTION_HORIZON)
 
     # This experiment is just a regulator, but the LinearTracking API expects a target trajectory.
     target_traj = np.zeros((1, T + 1))

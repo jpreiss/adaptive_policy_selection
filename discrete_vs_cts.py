@@ -2,47 +2,23 @@
 
 import multiprocessing
 
-import matplotlib as mpl
 import numpy as np
-import pandas as pd
 from scipy.linalg import solve_discrete_are
 
 from discrete import MPCHorizonSelector
 from lineartracking import LinearTracking
-from MPCLTI import MPCLTI
-from util import fastmode
-
-
-def contraction_properties(F):
-    """Returns contraction properties of F.
-
-    Returns ρ, C such that |F^k| <= C ρ^k, where |.| is the Euclidean operator norm.
-    """
-    n = F.shape[0]
-    rho = np.amax(np.abs(np.linalg.eigvals(F)))
-    assert rho < 1
-
-    powers = [np.eye(n)]
-    npows = 100
-    for _ in range(npows - 1):
-        powers.append(F @ powers[-1])
-    norms = [np.linalg.norm(Fk, ord=2) for Fk in powers]
-
-    # Make sure we got past the transient phase.
-    assert norms[-1] < norms[-2]
-
-    Cs = np.array(norms) / (rho ** np.arange(npows))
-    C = np.amax(Cs)
-    return rho, C
+from MPCLTI import MPCLTI, MPCLTI_GAPS
+from util import contraction_properties, discretized_double_integrator_2d, fastmode
 
 
 def run(lti, horizon, controller, T):
     for _ in range(T):
         x, context = lti.observe(horizon)
         u = controller.decide_action(x, context)
+        if isinstance(u, tuple):
+            u = u[0]
         grad_tuple = lti.step(u)
-        if controller.learning_rate > 0:
-            controller.update_param(grad_tuple)
+        controller.update_param(grad_tuple)
     cost_traj, state_traj = lti.reset()
     return cost_traj, state_traj
 
@@ -64,20 +40,7 @@ def main():
     R_SCALE = 1e-2
 
     # Set up the LQ problem instance: discretized double integrator.
-    zero2x2 = np.zeros((2, 2))
-    A = np.block([
-        [np.eye(2), DT * np.eye(2)],
-        [  zero2x2,      np.eye(2)],
-    ])
-    B = np.block([
-        [       zero2x2],
-        [DT * np.eye(2)],
-    ])
-    Q = np.block([
-        [DT * np.eye(2),              zero2x2],
-        [       zero2x2, 0.1 * DT * np.eye(2)],
-    ])
-    R = R_SCALE * DT * np.eye(2)
+    A, B, Q, R = discretized_double_integrator_2d(DT)
     n, m = B.shape
     P = solve_discrete_are(A, B, Q, R)
     x_0 = np.zeros(4)
@@ -104,7 +67,7 @@ def main():
     print("Computing costs of each MPC horizon with full trust...")
     cost_estimate_batch = T
     args = [
-        (LTI_instance, k, MPCLTI(np.ones(k), 0, 0.0), T)
+        (LTI_instance, k, MPCLTI(np.ones(k), A, B, Q, R), T)
         for k in horizons
     ]
     pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
@@ -115,16 +78,16 @@ def main():
     cost_histories = np.array(cost_histories)
     step_losses = np.sum(cost_histories, axis=1) / cost_estimate_batch
     cost_scale = 1.0 / np.amax(step_losses)
+    print(f"{cost_scale = }", cost_scale)
     step_losses *= cost_scale
     cost_histories *= cost_scale  # Used to compute regret later.
     Q *= cost_scale
     R *= cost_scale
     P *= cost_scale
-    # Scaling Q and R by the same value doesn't affect the optimal controller 
+    # Scaling Q and R by the same value doesn't affect the optimal controller.
     LTI_instance = LinearTracking(A, B, Q, R, Qf=P, init_state=x_0, traj=target_trajectory, ws=ws, es=es)
 
-    # TODO: Currently assuming the MPC contraction parameters are no larger
-    # than those of the LQR-optimal linear controller - is this true?
+    # Using the closed form LQR-optimal linear controller to get tighter contraction parameters.
     K = np.linalg.solve(R + B.T @ P @ B, B.T) @ P @ A
     F = A - B @ K
     rho, C = contraction_properties(F)
@@ -146,7 +109,7 @@ def main():
     initial_param = np.zeros(max_horizon)
     oco_rate = (1.0 - rho) ** (5.0 / 2) / np.sqrt(T)
     oco_buffer = int(np.log(T) / (2.0 * np.log(1.0 / rho)) + 1)
-    MPC_instance = MPCLTI(initial_param=initial_param, buffer_length=oco_buffer, learning_rate=oco_rate)
+    MPC_instance = MPCLTI_GAPS(initial_param=initial_param, buffer_length=oco_buffer, learning_rate=oco_rate)
     cts_cost_history, cts_whole_trajectory = run(LTI_instance, max_horizon, MPC_instance, T)
     param_history = np.stack(MPC_instance.param_history)
 
@@ -154,7 +117,7 @@ def main():
     opt_param = param_history[-1]
     with np.printoptions(precision=3):
         print(f"optimal trust parameters: {opt_param}")
-    MPC_cts_opt = MPCLTI(initial_param=opt_param, buffer_length=oco_buffer, learning_rate=0.0)
+    MPC_cts_opt = MPCLTI_GAPS(initial_param=opt_param, buffer_length=oco_buffer, learning_rate=0.0)
     cts_opt_cost_history, _ = run(LTI_instance, max_horizon, MPC_cts_opt, T)
 
     np.savez(

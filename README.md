@@ -5,6 +5,7 @@ Numerical experiments for the manuscript:
 *Online Adaptive Policy Selection in Time-Varying Systems: No-Regret via Contractive Perturbations*<br/>
 Yiheng Lin, James A. Preiss, Emile Anand, Yingying Li, Yisong Yue, Adam Wierman<br/>
 Caltech<br/>
+NeurIPS 2023 (to appear).</br>
 https://arxiv.org/abs/2210.12320
 
 ## To reproduce the plots in the manuscript:
@@ -32,6 +33,7 @@ https://arxiv.org/abs/2210.12320
 - `lambda_confident.py`: Experiment 1 - MPC scalar confidence tuning, GAPS vs. baseline
 - `pendulum.py`: Experiment 2 - Linear controller in nonlinear system, GAPS vs. LQR
 - `discrete_vs_cts.py`: Experiment 3 (appendix) - GAPS MPC multi-step confidence tuning vs. bandit MPC horizon tuning
+- `gaps_vs_ocom.py`: Computation time experiment (appendix) - Computation time experiment vs. another gradient approximation [1]
 - Any `*plot*.py`: Plots data written to file by one of the experiments above.
 
 ### Other
